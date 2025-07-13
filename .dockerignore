@@ -1,0 +1,11 @@
+# Ignore credential files in Docker build
+*.json
+.DS_Store
+*.log
+sync_logs/
+cred_profiles/
+.git/
+README.md
+*.md
+test-*
+hooks/

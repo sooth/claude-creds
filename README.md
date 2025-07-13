@@ -1,142 +1,181 @@
-# claude-creds 🔐
+# Claude OAuth Token Refresh System
 
-A convenient Bash script for managing multiple Claude CLI authentication profiles on macOS.
+Automatically refresh Claude OAuth tokens for multiple accounts using Docker isolation, preventing token expiration and maintaining continuous access.
 
-## Overview
+## 🚀 Quick Start
 
-`claude-creds` allows you to save and switch between different Claude CLI credentials stored in your macOS Keychain. This is particularly useful when working with multiple Claude accounts or switching between personal and work profiles.
-
-## Features
-
-- 🔑 **Secure Storage**: Leverages macOS Keychain for secure credential storage
-- 👥 **Multiple Profiles**: Save and manage multiple authentication profiles
-- 🔄 **Easy Switching**: Quickly switch between different Claude accounts
-- 🔒 **Touch ID Support**: Integrates with macOS security features
-- 📁 **JSON Backup**: Exports credentials to encrypted JSON files
-
-## Requirements
-
-- macOS (uses Keychain Services)
-- Claude CLI installed and authenticated at least once
-- Bash shell
-- Python 3 (comes pre-installed on macOS)
-
-## Installation
-
-1. Clone this repository or download the script:
-   ```bash
-   git clone https://github.com/yourusername/claude-creds.git
-   cd claude-creds
-   ```
-
-2. Make the script executable:
-   ```bash
-   chmod +x claude-creds.sh
-   ```
-
-3. (Optional) Add to your PATH for global access:
-   ```bash
-   ln -s $(pwd)/claude-creds.sh /usr/local/bin/claude-creds
-   ```
-
-## Usage
-
-### Basic Commands
-
-#### Backup current credentials
-Save your current Claude CLI credentials to a named profile:
-```bash
-./claude-creds.sh backup work
-```
-
-#### Switch to a different profile
-Restore credentials from a saved profile:
-```bash
-./claude-creds.sh switch personal
-# or
-./claude-creds.sh restore personal
-```
-
-#### List available profiles
-View all saved credential profiles:
-```bash
-./claude-creds.sh list
-```
-
-### Advanced Options
-
-#### Custom Keychain Service
-If Claude CLI uses a non-standard Keychain service name:
-```bash
-./claude-creds.sh --service "Custom-Claude-Service" backup myprofile
-```
-
-#### Custom Storage Directory
-Override the default credential storage location:
-```bash
-export CLAUDE_CREDS_DIR="$HOME/my-claude-profiles"
-./claude-creds.sh backup myprofile
-```
-
-## How It Works
-
-1. **Backup**: The script reads your current Claude credentials from the macOS Keychain and saves them to a JSON file in `~/.claude/cred_profiles/`
-2. **Restore**: When switching profiles, it reads the saved JSON file and updates the Keychain with those credentials
-3. **Security**: Profile files are created with 600 permissions (read/write for owner only)
-
-## File Locations
-
-- **Default credential storage**: `~/.claude/cred_profiles/`
-- **Profile format**: `<profile-name>.json`
-- **Keychain location**: `~/Library/Keychains/login.keychain-db`
-
-## Security Considerations
-
-- Credential files are stored with restrictive permissions (600)
-- The script may trigger Touch ID or password prompts when accessing Keychain
-- Profile names must contain only letters, numbers, underscores, or hyphens
-- Consider encrypting the credential directory for additional security
-
-## Troubleshooting
-
-### "Claude credential not found"
-Run `claude /login` first to authenticate with Claude CLI, or use the `--service` flag if your Keychain service has a custom name.
-
-### "Keychain denied read access"
-Approve the Keychain access prompt when it appears, then rerun the command.
-
-### Profile not found
-Check that the profile exists with `./claude-creds.sh list` and verify the profile name spelling.
-
-## Example Workflow
+**Prerequisites**: macOS, Docker, Claude CLI (`npm install -g @anthropic-ai/claude-code`)
 
 ```bash
-# Initial setup - authenticate with work account
-claude /login
+# 1. Export your Claude credentials from Keychain
+./claude-creds.sh backup myprofile    # Creates a profile named 'myprofile'
 
-# Save work credentials
-./claude-creds.sh backup work
+# 2. Build the Docker image
+./build.sh
 
-# Switch to personal account in Claude CLI
-claude /logout
-claude /login  # Login with personal credentials
+# 3. Prepare Claude binary for Docker (first time only)
+./claude-refresh-docker.sh prepare
 
-# Save personal credentials
-./claude-creds.sh backup personal
+# 4. Test token refresh manually
+./claude-refresh-docker.sh run
 
-# Now you can switch between accounts easily
-./claude-creds.sh switch work    # Switch to work account
-./claude-creds.sh switch personal # Switch to personal account
+# 5. Set up automatic refresh every 15 minutes
+./setup-auto-refresh.sh
 ```
 
-## Contributing
+That's it! Your tokens will be refreshed automatically.
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+## 📋 User Scripts
 
-## License
+These are the only scripts you need to interact with:
 
-This script is provided as-is for personal use. See LICENSE file for details.
+### `claude-creds.sh`
+Manage credential profiles (backup/restore from macOS Keychain)
+```bash
+./claude-creds.sh backup dm      # Backup 'dm' profile
+./claude-creds.sh restore dm     # Restore 'dm' profile
+./claude-creds.sh list           # List all profiles
+./claude-creds.sh switch aa      # Switch to 'aa' profile
+```
 
-## Author
+### `build.sh`
+Build the Docker image (run once or after updates)
+```bash
+./build.sh
+```
 
-Created for managing multiple Claude CLI authentication profiles on macOS.
+### `claude-refresh-docker.sh`
+Main refresh orchestration
+```bash
+./claude-refresh-docker.sh prepare  # Copy Claude binary (first time only)
+./claude-refresh-docker.sh run      # Run token refresh for all profiles
+```
+
+### `setup-auto-refresh.sh`
+Install automatic refresh every 15 minutes
+```bash
+./setup-auto-refresh.sh              # Install
+launchctl unload ~/Library/LaunchAgents/com.claude.refresh.plist  # Uninstall
+```
+
+### `sync-refreshed-profiles.sh`
+Sync refreshed tokens back to Keychain (called automatically)
+```bash
+./sync-refreshed-profiles.sh         # Manual sync if needed
+```
+
+## 🔧 How It Works
+
+1. **Export**: Claude credentials are exported from macOS Keychain
+2. **Docker**: Linux container runs Claude CLI with credentials
+3. **Refresh**: Claude automatically refreshes tokens when accessed
+4. **Sync**: Updated tokens are synced back to macOS Keychain
+
+The system runs in complete isolation using Docker, preventing any interference with your active Claude sessions.
+
+## 📚 Detailed Documentation
+
+### Architecture
+
+The system consists of three main components:
+
+1. **Credential Management** (`claude-creds.sh`)
+   - Interfaces with macOS Keychain using the `security` command
+   - Exports credentials in JSON format
+   - Manages multiple profiles (work, personal, etc.)
+
+2. **Docker Refresh Environment**
+   - Ubuntu 22.04 base with Node.js 22
+   - Isolated environment prevents interference
+   - Linux Claude CLI uses `.credentials.json` format
+
+3. **Automatic Scheduling**
+   - macOS LaunchAgent runs every 15 minutes
+   - Logs to `~/.claude/sync_logs/`
+
+### Token Format
+
+Tokens are stored as JSON in the macOS Keychain:
+```json
+{
+  "claudeAiOauth": {
+    "accessToken": "sk-ant-oat01-...",
+    "refreshToken": "sk-ant-ort01-...",
+    "expiresAt": 1752466160663,
+    "scopes": ["user:inference", "user:profile"],
+    "subscriptionType": "max"
+  }
+}
+```
+
+### Monitoring
+
+View logs to monitor token refresh:
+```bash
+# Watch real-time logs
+tail -f ~/.claude/sync_logs/refresh-*.log
+
+# Check specific profile
+tail -f ~/.claude/sync_logs/refresh-*.log | grep "[dm]"
+
+# View LaunchAgent logs
+tail -f ~/.claude/sync_logs/launchd-refresh-stdout.log
+```
+
+### Configuration
+
+- **Refresh Interval**: Edit `StartInterval` in `com.claude.refresh.plist` (default: 900 seconds)
+- **Profiles**: Stored in `~/.claude/cred_profiles/`
+- **Logs**: Located in `~/.claude/sync_logs/`
+
+## 🔍 Troubleshooting
+
+### "Claude AI usage limit reached"
+This is normal for accounts that have hit their limit. The token is still valid but cannot be used until the limit resets.
+
+### "Invalid API key"
+The token has expired. The refresh should update it automatically. If not:
+1. Log in manually: `claude` (on host)
+2. Re-export the profile: `./claude-creds.sh backup [profile]`
+
+### Docker build fails
+Ensure Docker is running and you have sufficient disk space.
+
+### Tokens not refreshing
+Check logs for errors:
+```bash
+docker logs $(docker ps -lq)
+cat ~/.claude/sync_logs/refresh-*.log | tail -50
+```
+
+## 📁 Complete File Reference
+
+### Essential Files (7)
+- `claude-creds.sh` - Credential management
+- `Dockerfile` - Docker image definition
+- `docker-refresh-claude.sh` - Runs inside container
+- `claude-refresh-docker.sh` - Orchestrates refresh
+- `setup-auto-refresh.sh` - Automatic scheduling
+- `com.claude.refresh.plist` - LaunchAgent config
+- `sync-refreshed-profiles.sh` - Sync tokens back
+
+### Supporting Files
+- `build.sh` - Simple Docker build script
+- `.dockerignore` - Excludes unnecessary files from Docker
+- `claude-docker/` - Directory with Claude binary and dependencies
+
+### Generated Directories
+- `~/.claude/cred_profiles/` - Stored credential profiles
+- `~/.claude/cred_profiles_refreshed/` - Refreshed profiles
+- `~/.claude/sync_logs/` - All logs
+
+## 🔒 Security
+
+- Credentials are stored in macOS Keychain (encrypted)
+- Docker container runs as non-root user
+- Credentials files have 600 permissions
+- No credentials are logged or exposed
+
+## 📝 License
+
+This tool is provided as-is for managing Claude OAuth tokens. Use at your own risk.
