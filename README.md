@@ -6,6 +6,7 @@ Automatically refresh Claude OAuth tokens for multiple accounts using Docker iso
 
 **Prerequisites**: macOS, Docker, Claude CLI (`npm install -g @anthropic-ai/claude-code`)
 
+### Single Account Setup
 ```bash
 # 1. Export your Claude credentials from Keychain
 ./claude-creds.sh backup myprofile    # Creates a profile named 'myprofile'
@@ -23,7 +24,24 @@ Automatically refresh Claude OAuth tokens for multiple accounts using Docker iso
 ./setup-auto-refresh.sh
 ```
 
-That's it! Your tokens will be refreshed automatically.
+### Multiple Accounts Setup
+```bash
+# 1. Export credentials for first account (e.g., work)
+./claude-creds.sh backup work
+
+# 2. Switch accounts in Claude (restart Claude to apply changes)
+./claude-creds.sh switch personal   # If you have 'personal' saved already
+# OR manually login to your second account:
+# - Quit Claude completely (Cmd+Q)
+# - Start Claude and login with second account
+
+# 3. Export credentials for second account
+./claude-creds.sh backup personal
+
+# 4. Continue with steps 2-5 from Single Account Setup above
+```
+
+That's it! Your tokens for both accounts will be refreshed automatically.
 
 ## 📋 User Scripts
 
@@ -33,10 +51,11 @@ These are the only scripts you need to interact with:
 Manage credential profiles (backup/restore from macOS Keychain)
 ```bash
 ./claude-creds.sh backup dm      # Backup 'dm' profile
-./claude-creds.sh restore dm     # Restore 'dm' profile
+./claude-creds.sh restore dm     # Restore 'dm' profile  
 ./claude-creds.sh list           # List all profiles
 ./claude-creds.sh switch aa      # Switch to 'aa' profile
 ```
+**Note**: After switching profiles with `restore` or `switch`, restart Claude (Cmd+Q and reopen) to use the new credentials.
 
 ### `build.sh`
 Build the Docker image (run once or after updates)
